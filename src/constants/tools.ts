@@ -13,14 +13,19 @@ import {
   Share2, 
   Cpu, 
   Globe, 
-  ShieldCheck 
+  ShieldCheck,
+  Users,
+  Key
 } from 'lucide-react';
 import { Tool, AppConfig } from '../types';
 
 export const SIDEBAR_TOOLS: Tool[] = [
   { id: 'imowhatsapp', name: 'IMO & WhatsApp', icon: Activity, color: 'text-green-500' },
   { id: 'social', name: 'Social Media QoS', icon: Share2, color: 'text-blue-500' },
+  { id: 'pppoe-profile', name: 'PPPoE Profile', icon: Users, color: 'text-indigo-500' },
+  { id: 'pppoe-secret', name: 'PPPoE Secret', icon: Key, color: 'text-amber-500' },
   { id: 'vpn', name: 'VPN Block', icon: ShieldAlert, color: 'text-red-500' },
+  { id: 'ippool', name: 'IP Pool Generator', icon: Network, color: 'text-teal-500' },
   { id: 'pcc', name: 'PCC Load Balance', icon: Zap, color: 'text-yellow-500' },
   { id: 'basic', name: 'Basic Config', icon: Settings, color: 'text-gray-500' },
   { id: 'knocking', name: 'Port Knocking', icon: Lock, color: 'text-indigo-500' },

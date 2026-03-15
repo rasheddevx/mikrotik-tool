@@ -42,6 +42,26 @@ function App() {
   const [globalUp, setGlobalUp] = useState('100M');
   const [clientDown, setClientDown] = useState('5M');
   const [clientUp, setClientUp] = useState('5M');
+  const [hotspotName, setHotspotName] = useState('FiberLinkBD-Hotspot');
+  const [hotspotDns, setHotspotDns] = useState('hotspot.fiberlinkbd.net');
+  const [bgpAsn, setBgpAsn] = useState('65530');
+  const [bgpRouterId, setBgpRouterId] = useState('10.0.0.1');
+  const [knockPort, setKnockPort] = useState('1337');
+  const [poolName, setPoolName] = useState('Premium-Pool');
+  const [poolRange, setPoolRange] = useState('10.10.10.2-10.10.10.254');
+  
+  const [profileName, setProfileName] = useState('Premium-Profile');
+  const [profileLocalAddress, setProfileLocalAddress] = useState('192.168.1.1');
+  const [profileRemoteAddress, setProfileRemoteAddress] = useState('Premium-Pool');
+  const [profileRateLimit, setProfileRateLimit] = useState('5M/5M');
+  const [profileDns, setProfileDns] = useState('8.8.8.8, 1.1.1.1');
+
+  const [secretName, setSecretName] = useState('user1');
+  const [secretPassword, setSecretPassword] = useState('1234');
+  const [secretProfile, setSecretProfile] = useState('Premium-Profile');
+  const [secretService, setSecretService] = useState('pppoe');
+  const [secretLocalAddress, setSecretLocalAddress] = useState('');
+  const [secretRemoteAddress, setSecretRemoteAddress] = useState('');
 
   useEffect(() => {
     const handleResize = () => {
@@ -55,6 +75,14 @@ function App() {
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const handleToolChange = (id: string) => {
+    setActiveTool(id);
+    setGeneratedScript('');
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
 
   const toggleApp = (id: string) => {
     setSelectedApps(prev => 
@@ -71,6 +99,9 @@ function App() {
       'nth': 'NTH মেথড ব্যবহার করে একাধিক ইন্টারনেট লাইনের মধ্যে ট্রাফিক সমানভাবে ভাগ করে দিন।',
       'basic': 'রাউটারের বেসিক কনফিগারেশন যেমন আইডেন্টিটি, ডিএনএস, এবং টাইম জোন সেটআপ করুন।',
       'pcq': 'PCQ (Per Connection Queue) ব্যবহার করে নেটওয়ার্কের সকল গ্রাহকের মধ্যে সমানভাবে ব্যান্ডউইথ বন্টন করুন।',
+      'ippool': 'ম্যানুয়ালি অথবা অটো-জেনারেট ফিচারের মাধ্যমে আপনার নেটওয়ার্কের জন্য প্রিমিয়াম আইপি পুল (IP Pool) তৈরি করুন।',
+      'pppoe-profile': 'আপনার মাইক্রোটিক রাউটারের জন্য নতুন PPPoE প্রোফাইল তৈরি করুন এবং ব্যান্ডউইথ লিমিট সেট করুন।',
+      'pppoe-secret': 'আপনার গ্রাহকদের জন্য নতুন PPPoE ইউজার (Secret) তৈরি করুন এবং প্রোফাইল অ্যাসাইন করুন।',
     };
     return descriptions[toolId] || 'এই টুলের মাধ্যমে আপনার মাইক্রোটিক রাউটারের প্রয়োজনীয় কনফিগারেশন স্ক্রিপ্ট তৈরি করুন।';
   };
@@ -123,6 +154,45 @@ function App() {
       script += `add kind=pcq name=PCQ_Upload pcq-classifier=src-address pcq-rate=${clientUp}\n`;
       script += `\n/queue simple\n`;
       script += `add max-limit=${globalUp}/${globalDown} name="Global PCQ" queue=PCQ_Upload/PCQ_Download target=${networkIp}\n`;
+    } else if (activeTool === 'hotspot') {
+      script += `/ip hotspot profile\n`;
+      script += `add dns-name=${hotspotDns} hotspot-address=${networkIp.split('/')[0]} name=hsprof1\n`;
+      script += `/ip hotspot\n`;
+      script += `add interface=${lanInterface} name=${hotspotName} profile=hsprof1\n`;
+    } else if (activeTool === 'bgp') {
+      script += `/routing bgp instance\n`;
+      script += `set default as=${bgpAsn} router-id=${bgpRouterId}\n`;
+    } else if (activeTool === 'knocking') {
+      script += `/ip firewall filter\n`;
+      script += `add action=add-src-to-address-list address-list=knocked address-list-timeout=1m chain=input dst-port=${knockPort} protocol=tcp\n`;
+      script += `add action=accept chain=input src-address-list=knocked\n`;
+    } else if (activeTool === 'ippool') {
+      script += `/ip pool\n`;
+      script += `add name="${poolName}" ranges=${poolRange}\n`;
+    } else if (activeTool === 'pppoe-profile') {
+      script += `/ppp profile\n`;
+      script += `add name="${profileName}" local-address="${profileLocalAddress}" remote-address="${profileRemoteAddress}" rate-limit="${profileRateLimit}" dns-server="${profileDns}"\n`;
+    } else if (activeTool === 'pppoe-secret') {
+      script += `/ppp secret\n`;
+      let secretCmd = `add name="${secretName}" password="${secretPassword}" profile="${secretProfile}" service=${secretService}`;
+      if (secretLocalAddress) secretCmd += ` local-address="${secretLocalAddress}"`;
+      if (secretRemoteAddress) secretCmd += ` remote-address="${secretRemoteAddress}"`;
+      script += secretCmd + `\n`;
+    } else if (activeTool === 'pcqburst') {
+      script += `/queue type\n`;
+      script += `add kind=pcq name=PCQ_Burst_Down pcq-classifier=dst-address pcq-rate=${clientDown} pcq-burst-rate=${burstDownload}M pcq-burst-threshold=${Math.floor(Number(burstDownload)*0.8)}M pcq-burst-time=10s\n`;
+      script += `add kind=pcq name=PCQ_Burst_Up pcq-classifier=src-address pcq-rate=${clientUp} pcq-burst-rate=${burstUpload}M pcq-burst-threshold=${Math.floor(Number(burstUpload)*0.8)}M pcq-burst-time=10s\n`;
+    } else if (activeTool === 'expired') {
+      script += `/ip firewall nat\n`;
+      script += `add action=dst-nat chain=dstnat src-address-list=${routerIdentity} dst-port=80,443 protocol=tcp to-addresses=${networkIp.split(':')[0]} to-ports=${networkIp.split(':')[1] || '80'}\n`;
+      script += `/ip firewall filter\n`;
+      script += `add action=drop chain=forward src-address-list=${routerIdentity}\n`;
+    } else if (activeTool === 'database') {
+      script += `/ip firewall nat\n`;
+      script += `add action=dst-nat chain=dstnat dst-port=${knockPort} protocol=tcp to-addresses=${networkIp} to-ports=${knockPort}\n`;
+    } else if (activeTool === 'calc' || activeTool === 'burst') {
+      script += `# This tool is a calculator. No configuration script is generated.\n`;
+      script += `# Use the UI to calculate bandwidth and burst rates.\n`;
     } else {
       script += `# Configuration script for ${activeTool} will be generated here.\n`;
       script += `# Please select specific parameters to generate the full script.\n`;
@@ -143,13 +213,21 @@ function App() {
       <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
       <div className="flex flex-1 relative">
+        {/* Mobile Sidebar Overlay */}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-slate-900/50 z-30 md:hidden backdrop-blur-sm transition-opacity"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         <Sidebar 
           activeTool={activeTool} 
-          setActiveTool={setActiveTool} 
+          setActiveTool={handleToolChange} 
           sidebarOpen={sidebarOpen} 
         />
 
-        <main className="flex-1 p-4 md:p-8 max-w-6xl mx-auto w-full">
+        <main className="flex-1 min-w-0 p-4 md:p-8 max-w-6xl mx-auto w-full">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 space-y-8">
             
             {/* --- Tool Header --- */}
@@ -239,6 +317,42 @@ function App() {
                 setClientDown={setClientDown}
                 clientUp={clientUp}
                 setClientUp={setClientUp}
+                hotspotName={hotspotName}
+                setHotspotName={setHotspotName}
+                hotspotDns={hotspotDns}
+                setHotspotDns={setHotspotDns}
+                bgpAsn={bgpAsn}
+                setBgpAsn={setBgpAsn}
+                bgpRouterId={bgpRouterId}
+                setBgpRouterId={setBgpRouterId}
+                knockPort={knockPort}
+                setKnockPort={setKnockPort}
+                poolName={poolName}
+                setPoolName={setPoolName}
+                poolRange={poolRange}
+                setPoolRange={setPoolRange}
+                profileName={profileName}
+                setProfileName={setProfileName}
+                profileLocalAddress={profileLocalAddress}
+                setProfileLocalAddress={setProfileLocalAddress}
+                profileRemoteAddress={profileRemoteAddress}
+                setProfileRemoteAddress={setProfileRemoteAddress}
+                profileRateLimit={profileRateLimit}
+                setProfileRateLimit={setProfileRateLimit}
+                profileDns={profileDns}
+                setProfileDns={setProfileDns}
+                secretName={secretName}
+                setSecretName={setSecretName}
+                secretPassword={secretPassword}
+                setSecretPassword={setSecretPassword}
+                secretProfile={secretProfile}
+                setSecretProfile={setSecretProfile}
+                secretService={secretService}
+                setSecretService={setSecretService}
+                secretLocalAddress={secretLocalAddress}
+                setSecretLocalAddress={setSecretLocalAddress}
+                secretRemoteAddress={secretRemoteAddress}
+                setSecretRemoteAddress={setSecretRemoteAddress}
               />
             </div>
 
